@@ -1,43 +1,60 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { elapsedActiveSeconds, simulateUsage } = require("../src/simulator");
+const { listAmrs, simulateTimeline, simulateUsage } = require("../src/simulator");
 
 const config = {
+  simulationStart: "2026-05-11T15:00:44.959Z",
+  metersPerNavigatingSecond: 0.58,
+  minNavigateS: 15,
+  maxNavigateS: 300,
+  minIdleS: 30,
+  maxIdleS: 900,
+  minChargeEveryS: 12 * 3600,
+  maxChargeEveryS: 16 * 3600,
+  minChargeDurationS: 2 * 3600,
+  maxChargeDurationS: 3 * 3600
+};
+
+const amr = {
   amrId: "C2M-000409",
   amrMac: "9c:b8:b4:5d:ee:ba",
   amrName: "Hammer",
-  simulationStart: "2026-05-11T15:00:44.959Z",
   baseDistanceM: 23460.0,
-  baseOperatingS: 12463467.3,
-  distancePerDeliveryM: 420,
-  deliveryDurationS: 720,
-  betweenDeliveriesS: 480,
-  workdayStartHourUtc: 7,
-  workdayEndHourUtc: 19
+  baseOperatingS: 12463467.3
 };
 
-test("operating time increases during workday hours", () => {
-  const start = new Date("2026-05-12T08:00:00.000Z");
-  const now = new Date("2026-05-12T09:30:00.000Z");
+test("lists multiple AMRs", () => {
+  const amrs = listAmrs();
 
-  assert.equal(elapsedActiveSeconds(start, now, config), 5400);
+  assert.ok(amrs.length >= 3);
+  assert.deepEqual(amrs[0], {
+    amr_id: "C2M-000409",
+    amr_mac: "9c:b8:b4:5d:ee:ba",
+    amr_name: "Hammer"
+  });
+  assert.ok(amrs.some((listedAmr) => listedAmr.amr_id === "C2S-000410"));
+  assert.ok(amrs.some((listedAmr) => listedAmr.amr_id === "C2L-000411"));
 });
 
-test("operating time pauses overnight", () => {
-  const start = new Date("2026-05-12T18:30:00.000Z");
-  const now = new Date("2026-05-13T07:30:00.000Z");
+test("timeline includes charging windows", () => {
+  const timeline = simulateTimeline(amr, new Date("2026-05-12T05:00:44.959Z"), config);
 
-  assert.equal(elapsedActiveSeconds(start, now, config), 3600);
+  assert.equal(timeline.status, "charging");
 });
 
-test("usage response preserves billing schema and increases counters", () => {
-  const usage = simulateUsage(new Date("2026-05-11T15:20:44.959Z"), config);
+test("usage response preserves billing schema and includes status", () => {
+  const usage = simulateUsage("C2M-000409", new Date("2026-05-11T15:20:44.959Z"), config);
 
   assert.equal(usage.amr_id, "C2M-000409");
   assert.equal(usage.schema_version, "billing_usage_v1");
   assert.equal(usage.distance_units, "m");
   assert.equal(usage.time_operating_units, "s");
   assert.equal(usage.generated_at, "2026-05-11T15:20:44.959Z");
-  assert.ok(usage.distance_traveled > config.baseDistanceM);
-  assert.ok(usage.time_operating > config.baseOperatingS);
+  assert.match(usage.status, /^(navigating|charging|idle)$/);
+  assert.ok(usage.distance_traveled > amr.baseDistanceM);
+  assert.ok(usage.time_operating > amr.baseOperatingS);
+});
+
+test("unknown AMR returns null", () => {
+  assert.equal(simulateUsage("C2M-999999", new Date("2026-05-11T15:20:44.959Z"), config), null);
 });

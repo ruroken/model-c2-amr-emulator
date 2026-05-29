@@ -10,15 +10,5 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: AMR_ID
-        value: C2M-000409
-      - key: AMR_MAC
-        value: 9c:b8:b4:5d:ee:ba
-      - key: AMR_NAME
-        value: Hammer
       - key: SIMULATION_START
         value: 2026-05-11T15:00:44.959Z
-      - key: BASE_DISTANCE_M
-        value: "23460"
-      - key: BASE_OPERATING_S
-        value: "12463467.3"
